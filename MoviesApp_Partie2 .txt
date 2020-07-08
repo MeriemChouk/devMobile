@@ -1,0 +1,419 @@
+
+**************
+* Partie 2/2 *
+**************
+
+
+****************************************************************************************************************
+//Installing dependencies into an Expo managed project(https://reactnavigation.org/docs/getting-started/)
+
+npm i react-navigation-stack react-navigation --save
+
+expo install react-native-gesture-handler react-native-reanimated react-native-screens react-native-safe-area-context @react-native-community/masked-view
+
+//Pour formater la date
+npm install --save moment
+//Pour formater le budget
+npm install --save numeral
+
+****************************************************************************************************************
+
+https://reactnavigation.org
+
+//Navigation/Navigation.js
+
+import { createStackNavigator } from 'react-navigation-stack'
+import { createAppContainer } from 'react-navigation'
+import Search from '../Components/Search'
+import FilmDetail from '../Components/FilmDetail'
+
+const SearchStackNavigator = createStackNavigator({
+  Search: {
+    screen: Search,
+    navigationOptions: {
+      title: 'Rechercher'
+    }
+  },
+  FilmDetail: { // Encore une fois j'ai mis le même nom que celui du component mais libre à vous de choisir un nom différent
+    screen: FilmDetail
+  }
+})
+
+export default createAppContainer(SearchStackNavigator)
+
+
+****************************************************************************************************************
+
+// API/TMDBApi.js
+
+const API_TOKEN = "Your Key";
+export function getFilmsFromApiWithSearchedText (text, page) {
+    const url = 'https://api.themoviedb.org/3/search/movie?api_key=' + API_TOKEN + '&language=fr&query=' + text + "&page=" + page
+    return fetch(url)
+      .then((response) => response.json())
+      .catch((error) => console.error(error))
+
+  }
+  // API/TMDBApi.js
+
+export function getImageFromApi (name) {
+    return 'https://image.tmdb.org/t/p/w300' + name
+  }
+
+  // Récupération du détail d'un film
+export function getFilmDetailFromApi (id) {
+  return fetch('https://api.themoviedb.org/3/movie/' + id + '?api_key=' + API_TOKEN + '&language=fr')
+    .then((response) => response.json())
+    .catch((error) => console.error(error));
+}
+
+****************************************************************************************************************
+
+
+// App.js
+
+import React from 'react';
+import Navigation from './Navigation/Navigation';
+
+export default function App() {
+  return (
+  <Navigation/>
+  );
+}
+
+
+****************************************************************************************************************
+
+// Components/Search.js
+
+import React from 'react'
+import { StyleSheet, View, TextInput, Button, Text, FlatList, ActivityIndicator } from 'react-native'
+import FilmItem from './FilmItem'
+import { getFilmsFromApiWithSearchedText } from '../API/TMDBApi'
+
+class Search extends React.Component {
+
+  constructor(props) {
+    super(props)
+    this.searchedText = ""
+    this.page = 0
+    this.totalPages = 0
+    this.state = {
+      films: [],
+      isLoading: false
+    }
+  }
+
+  _loadFilms() {
+    if (this.searchedText.length > 0) {
+      this.setState({ isLoading: true })
+      getFilmsFromApiWithSearchedText(this.searchedText, this.page + 1).then(data => {
+        this.page = data.page
+        this.totalPages = data.total_pages
+        this.setState({
+          films: [...this.state.films, ...data.results],
+          isLoading: false
+        })
+      })
+    }
+  }
+
+  _searchTextInputChanged(text) {
+    this.searchedText = text
+  }
+
+  _searchFilms() {
+    this.page = 0
+    this.totalPages = 0
+    this.setState({
+      films: [],
+    }, () => {
+      this._loadFilms()
+    })
+  }
+
+  _displayLoading() {
+    if (this.state.isLoading) {
+      return (
+        <View style={styles.loading_container}>
+          <ActivityIndicator size='large' />
+        </View>
+      )
+    }
+  }
+
+
+  _displayDetailForFilm = (idFilm) => {
+    console.log("Display film with id " + idFilm)
+    this.props.navigation.navigate("FilmDetail", { idFilm: idFilm })
+}
+
+  render() {
+    return (
+      <View style={styles.main_container}>
+        <TextInput
+          style={styles.textinput}
+          placeholder='Titre du film'
+          onChangeText={(text) => this._searchTextInputChanged(text)}
+          onSubmitEditing={() => this._searchFilms()}
+        />
+        <Button title='Rechercher' onPress={() => this._searchFilms()} />
+        <FlatList
+          data={this.state.films}
+          keyExtractor={(item) => item.id.toString()}
+          //renderItem={({item}) => <FilmItem film={item}/>}
+          renderItem={({ item }) => <FilmItem film={item} displayDetailForFilm={this._displayDetailForFilm} />}
+          onEndReachedThreshold={0.5}
+          onEndReached={() => {
+            if (this.page < this.totalPages) {
+              this._loadFilms()
+            }
+          }}
+        />
+        {this._displayLoading()}
+      </View>
+    )
+  }
+}
+
+const styles = StyleSheet.create({
+  main_container: {
+    flex: 1,
+  },
+  textinput: {
+    marginLeft: 5,
+    marginRight: 5,
+    height: 50,
+    borderColor: '#000000',
+    borderWidth: 1,
+    paddingLeft: 5
+  },
+  loading_container: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 100,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center'
+  }
+})
+
+export default Search;
+
+
+
+****************************************************************************************************************
+
+// Components/FilmItem.js
+
+import React from 'react'
+import { StyleSheet, View, Text, Image, TouchableOpacity } from 'react-native'
+import { getImageFromApi } from '../API/TMDBApi'
+
+class FilmItem extends React.Component {
+  // Components/FilmItem.js
+
+  render() {
+    //const film = this.props.film
+    //const displayDetailForFilm = this.props.displayDetailForFilm
+    const { film, displayDetailForFilm } = this.props
+
+    return (
+      <TouchableOpacity
+      style={styles.main_container}
+      onPress={() => displayDetailForFilm(film.id)}>
+        <Image
+          style={styles.image}
+          source={{ uri: getImageFromApi(film.poster_path) }}
+        />
+        <View style={styles.content_container}>
+          <View style={styles.header_container}>
+            <Text style={styles.title_text}>{film.title}</Text>
+            <Text style={styles.vote_text}>{film.vote_average}</Text>
+          </View>
+          <View style={styles.description_container}>
+            <Text style={styles.description_text} numberOfLines={6}>{film.overview}</Text>
+          </View>
+          <View style={styles.date_container}>
+            <Text style={styles.date_text}>Sorti le {film.release_date}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    )
+  }
+}
+
+const styles = StyleSheet.create({
+  main_container: {
+    height: 190,
+    flexDirection: 'row'
+  },
+  image: {
+    width: 120,
+    height: 180,
+    margin: 5,
+    backgroundColor: 'gray'
+  },
+  content_container: {
+    flex: 1,
+    margin: 5
+  },
+  header_container: {
+    flex: 3,
+    flexDirection: 'row'
+  },
+  title_text: {
+    fontWeight: 'bold',
+    fontSize: 20,
+    flex: 1,
+    flexWrap: 'wrap',
+    paddingRight: 5
+  },
+  vote_text: {
+    fontWeight: 'bold',
+    fontSize: 26,
+    color: '#666666'
+  },
+  description_container: {
+    flex: 7
+  },
+  description_text: {
+    fontStyle: 'italic',
+    color: '#666666'
+  },
+  date_container: {
+    flex: 1
+  },
+  date_text: {
+    textAlign: 'right',
+    fontSize: 14
+  }
+})
+
+export default FilmItem;
+
+****************************************************************************************************************
+
+// Components/FilmDetail.js
+
+import React from 'react'
+import { StyleSheet, View, Text, ActivityIndicator, ScrollView, Image } from 'react-native'
+import { getFilmDetailFromApi, getImageFromApi } from '../API/TMDBApi'
+import moment from 'moment'
+import numeral from 'numeral'
+
+class FilmDetail extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      film: undefined,
+      isLoading: true
+    }
+  }
+
+  componentDidMount() {
+    getFilmDetailFromApi(this.props.navigation.state.params.idFilm).then(data => {
+      this.setState({
+        film: data,
+        isLoading: false
+      })
+    })
+  }
+
+  _displayLoading() {
+    if (this.state.isLoading) {
+      return (
+        <View style={styles.loading_container}>
+          <ActivityIndicator size='large' />
+        </View>
+      )
+    }
+  }
+
+  _displayFilm() {
+    const { film } = this.state
+    if (film != undefined) {
+      return (
+        <ScrollView style={styles.scrollview_container}>
+          <Image
+            style={styles.image}
+            source={{uri: getImageFromApi(film.backdrop_path)}}
+          />
+          <Text style={styles.title_text}>{film.title}</Text>
+          <Text style={styles.description_text}>{film.overview}</Text>
+          <Text style={styles.default_text}>Sorti le {moment(new Date(film.release_date)).format('DD/MM/YYYY')}</Text>
+          <Text style={styles.default_text}>Note : {film.vote_average} / 10</Text>
+          <Text style={styles.default_text}>Nombre de votes : {film.vote_count}</Text>
+          <Text style={styles.default_text}>Budget : {numeral(film.budget).format('0,0[.]00 $')}</Text>
+          <Text style={styles.default_text}>Genre(s) : {film.genres.map(function(genre){
+              return genre.name;
+            }).join(" / ")}
+          </Text>
+          <Text style={styles.default_text}>Companie(s) : {film.production_companies.map(function(company){
+              return company.name;
+            }).join(" / ")}
+          </Text>
+        </ScrollView>
+      )
+    }
+  }
+
+  render() {
+    return (
+      <View style={styles.main_container}>
+        {this._displayLoading()}
+        {this._displayFilm()}
+      </View>
+    )
+  }
+}
+
+const styles = StyleSheet.create({
+  main_container: {
+    flex: 1
+  },
+  loading_container: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  scrollview_container: {
+    flex: 1
+  },
+  image: {
+    height: 169,
+    margin: 5
+  },
+  title_text: {
+    fontWeight: 'bold',
+    fontSize: 35,
+    flex: 1,
+    flexWrap: 'wrap',
+    marginLeft: 5,
+    marginRight: 5,
+    marginTop: 10,
+    marginBottom: 10,
+    color: '#000000',
+    textAlign: 'center'
+  },
+  description_text: {
+    fontStyle: 'italic',
+    color: '#666666',
+    margin: 5,
+    marginBottom: 15
+  },
+  default_text: {
+    marginLeft: 5,
+    marginRight: 5,
+    marginTop: 5,
+  }
+})
+
+export default FilmDetail
+	
+****************************************************************************************************************
